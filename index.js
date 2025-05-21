@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const express = require('express');
 const AdmZip = require('adm-zip');
@@ -15,6 +15,76 @@ const SECRET_PATH = `/webhook/${process.env.BOT_TOKEN}`;
 // Add error handling
 bot.catch((err, ctx) => {
   console.error(`Error for ${ctx.updateType}`, err);
+});
+
+// Welcome message and help command
+bot.start(async (ctx) => {
+  const userName = ctx.message.from.first_name;
+  
+  const welcomeMessage = `
+🎮 *Welcome to FF UID Generator Bot* 🎮
+
+Hello ${userName}! 👋 I'm your personal FreeFire UID generator bot!
+
+*How to use this bot:* 
+
+📱 Send */uid* to generate 1 account
+📱 Send */uid 5* to generate multiple accounts (max 20)
+
+*Features:*
+✅ Fast generation
+✅ Easy to use
+✅ ZIP file format
+✅ No login required
+✅ 100% Free
+
+*Example:*
+Type */uid 3* to get 3 FreeFire guest accounts
+
+*Need help?*
+Send */help* for more information
+
+🔥 *Enjoy gaming!* 🔥
+`;
+
+  // Create an inline keyboard with a button
+  const keyboard = Markup.inlineKeyboard([
+    Markup.button.callback('📱 Generate UID', 'generate_uid')
+  ]);
+
+  await ctx.replyWithMarkdown(welcomeMessage, keyboard);
+});
+
+// Handle the inline button click
+bot.action('generate_uid', async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.reply('🎮 Type /uid followed by a number to generate UIDs\nExample: /uid 5');
+});
+
+// Help command
+bot.command('help', async (ctx) => {
+  const helpMessage = `
+📋 *FF UID Generator Bot Help* 📋
+
+*Available Commands:*
+*/start* - Welcome message and bot info
+*/uid* - Generate 1 account
+*/uid X* - Generate X accounts (1-20)
+*/help* - Show this help message
+
+*How to use generated accounts:*
+1️⃣ Download the ZIP file
+2️⃣ Extract it to get the account data
+3️⃣ Use the guest account info to log in
+
+*Note:* 
+⚠️ Generated accounts are temporary guest accounts
+⚠️ Maximum 20 accounts per request
+
+If you have any issues, try again later!
+`;
+
+  await ctx.replyWithMarkdown(helpMessage);
 });
 
 // Your existing bot command
@@ -33,7 +103,7 @@ bot.command('uid', async (ctx) => {
   const input = ctx.message.text.split(' ')[1];
   const count = Math.min(parseInt(input) || 1, 20); // Max 20
 
-  await ctx.reply(`Generating ${count} UID(s)...`);
+  await ctx.reply(`🎮 Generating ${count} UID(s)... Please wait ⏳`);
 
   // Create temporary directory for files
   const tmpDir = path.join(os.tmpdir(), 'bot-' + Date.now());
@@ -41,7 +111,7 @@ bot.command('uid', async (ctx) => {
     fs.mkdirSync(tmpDir, { recursive: true });
   } catch (err) {
     console.error('Error creating temp directory:', err);
-    await ctx.reply('Error creating temporary files');
+    await ctx.reply('❌ Error creating temporary files');
     return;
   }
 
@@ -65,17 +135,18 @@ bot.command('uid', async (ctx) => {
         // Create folder structure in zip
         zip.addFile(`${i + 1}/guest100067.dat`, Buffer.from(textOutput));
       } else {
-        await ctx.reply(`UID ${i + 1}: guest_account_info missing.`);
+        await ctx.reply(`❌ UID ${i + 1}: guest_account_info missing.`);
       }
     } catch (err) {
       console.error('API error:', err);
-      await ctx.reply(`UID ${i + 1}: API call failed.`);
+      await ctx.reply(`❌ UID ${i + 1}: API call failed.`);
     }
   }
 
   // Write the zip and send it
   try {
     zip.writeZip(zipPath);
+    await ctx.reply('✅ Your accounts are ready! Sending ZIP file...');
     await ctx.replyWithDocument({ source: zipPath });
     
     // Clean up temp files (after a delay to ensure sending completes)
@@ -89,7 +160,7 @@ bot.command('uid', async (ctx) => {
     }, 10000);
   } catch (err) {
     console.error('Error creating zip:', err);
-    await ctx.reply('Error creating accounts zip file');
+    await ctx.reply('❌ Error creating accounts zip file');
   }
 });
 
