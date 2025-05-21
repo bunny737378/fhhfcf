@@ -2,6 +2,10 @@ require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 const express = require('express');
+const AdmZip = require('adm-zip');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const app = express();
 
 // Initialize bot with token from environment variable
@@ -31,22 +35,61 @@ bot.command('uid', async (ctx) => {
 
   await ctx.reply(`Generating ${count} UID(s)...`);
 
+  // Create temporary directory for files
+  const tmpDir = path.join(os.tmpdir(), 'bot-' + Date.now());
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  } catch (err) {
+    console.error('Error creating temp directory:', err);
+    await ctx.reply('Error creating temporary files');
+    return;
+  }
+
+  // Path for zip file
+  const zipPath = path.join(tmpDir, 'accounts.zip');
+  const zip = new AdmZip();
+  
+  // Generate accounts
   for (let i = 0; i < count; i++) {
     const randomName = generateRandomName();
     const url = `https://ff-account-register.vercel.app/genuidpw/?prefix=${randomName}`;
 
     try {
       const res = await axios.get(url);
-      const info = res.data.guest_account_info;
+      const info = res.data;
 
-      if (info) {
-        await ctx.reply(`UID ${i + 1}: ${JSON.stringify(info)}`);
+      if (info && info.guest_account_info) {
+        // Add file to zip
+        const textOutput = JSON.stringify(info);
+        
+        // Create folder structure in zip
+        zip.addFile(`${i + 1}/guest100067.dat`, Buffer.from(textOutput));
       } else {
         await ctx.reply(`UID ${i + 1}: guest_account_info missing.`);
       }
     } catch (err) {
+      console.error('API error:', err);
       await ctx.reply(`UID ${i + 1}: API call failed.`);
     }
+  }
+
+  // Write the zip and send it
+  try {
+    zip.writeZip(zipPath);
+    await ctx.replyWithDocument({ source: zipPath });
+    
+    // Clean up temp files (after a delay to ensure sending completes)
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(zipPath);
+        fs.rmdirSync(tmpDir, { recursive: true });
+      } catch (err) {
+        console.error('Error cleaning up temp files:', err);
+      }
+    }, 10000);
+  } catch (err) {
+    console.error('Error creating zip:', err);
+    await ctx.reply('Error creating accounts zip file');
   }
 });
 
