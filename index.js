@@ -87,111 +87,62 @@ If you have any issues, try again later!
   await ctx.replyWithMarkdown(helpMessage);
 });
 
-// Your existing bot command - updated to use a single status message
+// Your existing bot command - simplified with temporary message
 bot.command('uid', async (ctx) => {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-
-  const generateRandomName = () => {
-    const length = Math.floor(Math.random() * 11) + 10; // 10 to 20
-    let name = '';
-    for (let i = 0; i < length; i++) {
-      name += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return name;
-  };
-
-  const input = ctx.message.text.split(' ')[1];
-  const count = Math.min(parseInt(input) || 1, 20); // Max 20
-
-  // Send a single status message that we'll update
-  const statusMsg = await ctx.reply(`⏳ *Generating ${count} UID(s)...*\n\n_Please wait while I process your request_`);
-
-  // Create temporary directory for files
-  const tmpDir = path.join(os.tmpdir(), 'bot-' + Date.now());
   try {
-    fs.mkdirSync(tmpDir, { recursive: true });
-  } catch (err) {
-    console.error('Error creating temp directory:', err);
-    await ctx.telegram.editMessageText(
-      statusMsg.chat.id, 
-      statusMsg.message_id, 
-      undefined, 
-      '❌ Error creating temporary files'
-    );
-    return;
-  }
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const input = ctx.message.text.split(' ')[1];
+    const count = Math.min(parseInt(input) || 1, 20); // Max 20
 
-  // Path for zip file
-  const zipPath = path.join(tmpDir, 'accounts.zip');
-  const zip = new AdmZip();
-  
-  // Generate accounts
-  for (let i = 0; i < count; i++) {
-    // Update status message with progress
-    if (count > 1) {
-      await ctx.telegram.editMessageText(
-        statusMsg.chat.id, 
-        statusMsg.message_id, 
-        undefined, 
-        `⏳ *Generating UID ${i+1}/${count}...*\n\n_Please wait while I process your request_`
-      );
-    }
-    
-    const randomName = generateRandomName();
-    const url = `https://ff-account-register.vercel.app/genuidpw/?prefix=${randomName}`;
+    // Send temporary processing message
+    const processingMsg = await ctx.reply(`🎮 Processing your request... Generating⏳ ${count} UID(s)`);
 
-    try {
-      const res = await axios.get(url);
-      const info = res.data;
-
-      if (info && info.guest_account_info) {
-        // Add file to zip
-        const textOutput = JSON.stringify(info);
-        
-        // Create folder structure in zip
-        zip.addFile(`${i + 1}/guest100067.dat`, Buffer.from(textOutput));
-      } else {
-        await ctx.telegram.editMessageText(
-          statusMsg.chat.id, 
-          statusMsg.message_id, 
-          undefined, 
-          `❌ UID ${i + 1}: guest_account_info missing.`
-        );
+    const generateRandomName = () => {
+      const length = Math.floor(Math.random() * 11) + 10; // 10 to 20
+      let name = '';
+      for (let i = 0; i < length; i++) {
+        name += chars.charAt(Math.floor(Math.random() * chars.length));
       }
-    } catch (err) {
-      console.error('API error:', err);
-      await ctx.telegram.editMessageText(
-        statusMsg.chat.id, 
-        statusMsg.message_id, 
-        undefined, 
-        `❌ UID ${i + 1}: API call failed.`
-      );
-    }
-  }
+      return name;
+    };
 
-  // Write the zip and send it
-  try {
+    // Create temporary directory for files
+    const tmpDir = path.join(os.tmpdir(), 'bot-' + Date.now());
+    fs.mkdirSync(tmpDir, { recursive: true });
+
+    // Path for zip file
+    const zipPath = path.join(tmpDir, 'accounts.zip');
+    const zip = new AdmZip();
+    
+    // Generate accounts
+    for (let i = 0; i < count; i++) {
+      const randomName = generateRandomName();
+      const url = `https://ff-account-register.vercel.app/genuidpw/?prefix=${randomName}`;
+
+      try {
+        const res = await axios.get(url);
+        const info = res.data;
+
+        if (info && info.guest_account_info) {
+          // Add file to zip
+          const textOutput = JSON.stringify(info);
+          
+          // Create folder structure in zip
+          zip.addFile(`${i + 1}/guest100067.dat`, Buffer.from(textOutput));
+        }
+      } catch (err) {
+        console.error('API error:', err);
+      }
+    }
+
+    // Write the zip and send it
     zip.writeZip(zipPath);
     
-    // Final status update
-    await ctx.telegram.editMessageText(
-      statusMsg.chat.id, 
-      statusMsg.message_id, 
-      undefined, 
-      `✅ *${count} UID(s) Successfully Generated*\n\n_Sending ZIP file..._`
-    );
+    // Delete the processing message
+    await ctx.deleteMessage(processingMsg.message_id);
     
+    // Send the file
     await ctx.replyWithDocument({ source: zipPath });
-    
-    // After sending the file, delete the status message to keep chat clean
-    setTimeout(() => {
-      try {
-        ctx.telegram.deleteMessage(statusMsg.chat.id, statusMsg.message_id)
-          .catch(err => console.error('Could not delete message:', err));
-      } catch (err) {
-        console.error('Error deleting message:', err);
-      }
-    }, 3000);
     
     // Clean up temp files
     setTimeout(() => {
@@ -203,13 +154,8 @@ bot.command('uid', async (ctx) => {
       }
     }, 10000);
   } catch (err) {
-    console.error('Error creating zip:', err);
-    await ctx.telegram.editMessageText(
-      statusMsg.chat.id, 
-      statusMsg.message_id, 
-      undefined, 
-      '❌ Error creating accounts zip file'
-    );
+    console.error('Error in uid command:', err);
+    await ctx.reply('❌ An error occurred while generating UIDs. Please try again.');
   }
 });
 
