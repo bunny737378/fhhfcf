@@ -87,7 +87,7 @@ If you have any issues, try again later!
   await ctx.replyWithMarkdown(helpMessage);
 });
 
-// Updated UID command with new format
+// Your existing bot command - updated to use a single status message
 bot.command('uid', async (ctx) => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -145,16 +145,8 @@ bot.command('uid', async (ctx) => {
       const info = res.data;
 
       if (info && info.guest_account_info) {
-        // Modify the password format to include emoji and underscore
-        const modifiedInfo = {
-          guest_account_info: {
-            "com.garena.msdk.guest_password": `🌚_${info.guest_account_info["com.garena.msdk.guest_password"]}`,
-            "com.garena.msdk.guest_uid": info.guest_account_info["com.garena.msdk.guest_uid"]
-          }
-        };
-        
-        // Add file to zip with modified format
-        const textOutput = JSON.stringify(modifiedInfo);
+        // Add file to zip
+        const textOutput = JSON.stringify(info);
         
         // Create folder structure in zip
         zip.addFile(`${i + 1}/guest100067.dat`, Buffer.from(textOutput));
