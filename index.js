@@ -105,6 +105,9 @@ If you have any issues, try again later!
   await ctx.replyWithMarkdown(helpMessage);
 });
 
+// Global counter for sequential ZIP naming (in production, use database)
+let zipCounter = 1;
+
 // Updated UID command with custom name support
 bot.command('uid', async (ctx) => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -195,9 +198,13 @@ Please provide a name for your accounts.
     return;
   }
 
-  // Path for zip file
-  const zipPath = path.join(tmpDir, 'accounts.zip');
+  // Path for zip file with sequential naming
+  const zipFileName = `accounts(${zipCounter}).zip`;
+  const zipPath = path.join(tmpDir, zipFileName);
   const zip = new AdmZip();
+  
+  // Array to store UID and password data for ID.json
+  const accountsData = [];
   
   // Generate accounts
   for (let i = 0; i < count; i++) {
@@ -224,6 +231,14 @@ Please provide a name for your accounts.
         
         // Create folder structure in zip
         zip.addFile(`${i + 1}/guest100067.dat`, Buffer.from(textOutput));
+        
+        // Extract UID and password for ID.json
+        if (info.guest_account_info.guest_id && info.guest_account_info.guest_password) {
+          accountsData.push({
+            uid: info.guest_account_info.guest_id,
+            password: info.guest_account_info.guest_password
+          });
+        }
       } else {
         await ctx.telegram.editMessageText(
           statusMsg.chat.id, 
@@ -245,6 +260,12 @@ Please provide a name for your accounts.
 
   // Write the zip and send it
   try {
+    // Add ID.json file to zip with all account data
+    if (accountsData.length > 0) {
+      const idJsonContent = JSON.stringify(accountsData, null, 2);
+      zip.addFile('ID.json', Buffer.from(idJsonContent));
+    }
+    
     zip.writeZip(zipPath);
     
     // Final status update
@@ -252,11 +273,17 @@ Please provide a name for your accounts.
       statusMsg.chat.id, 
       statusMsg.message_id, 
       undefined, 
-      `✅ *${count} 🎮 UID(s) Successfully Generated*\n*Name Used:* ${finalName}\n\n_Sending ZIP file..._`,
+      `✅ *${count} 🎮 UID(s) Successfully Generated*\n*Name Used:* ${finalName}\n*File:* ${zipFileName}\n\n_Sending ZIP file..._`,
       { parse_mode: 'Markdown' }
     );
     
-    await ctx.replyWithDocument({ source: zipPath });
+    await ctx.replyWithDocument({ 
+      source: zipPath,
+      filename: zipFileName
+    });
+    
+    // Increment counter for next request
+    zipCounter++;
     
     // After sending the file, delete the status message to keep chat clean
     setTimeout(() => {
