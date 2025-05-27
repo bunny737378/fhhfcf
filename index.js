@@ -232,11 +232,41 @@ Please provide a name for your accounts.
         // Create folder structure in zip
         zip.addFile(`${i + 1}/guest100067.dat`, Buffer.from(textOutput));
         
-        // Extract UID and password for ID.json
-        if (info.guest_account_info.guest_id && info.guest_account_info.guest_password) {
+        // Debug: Log the structure to understand what fields are available
+        console.log(`Account ${i + 1} structure:`, JSON.stringify(info.guest_account_info, null, 2));
+        
+        // Extract UID and password for ID.json - try multiple possible field names
+        let uid = null;
+        let password = null;
+        
+        // Try different possible field names for UID
+        uid = info.guest_account_info.guest_id || 
+              info.guest_account_info.uid || 
+              info.guest_account_info.id || 
+              info.guest_account_info.account_id ||
+              info.guest_account_info.user_id;
+              
+        // Try different possible field names for password
+        password = info.guest_account_info.guest_password || 
+                   info.guest_account_info.password || 
+                   info.guest_account_info.pass || 
+                   info.guest_account_info.pwd;
+        
+        if (uid && password) {
           accountsData.push({
-            uid: info.guest_account_info.guest_id,
-            password: info.guest_account_info.guest_password
+            uid: uid.toString(),
+            password: password.toString()
+          });
+          console.log(`Added to accountsData: UID=${uid}, Password=${password}`);
+        } else {
+          console.log(`Could not extract UID/Password for account ${i + 1}`);
+          console.log('Available fields:', Object.keys(info.guest_account_info));
+          
+          // Still add to accountsData with available info
+          accountsData.push({
+            uid: uid || 'N/A',
+            password: password || 'N/A',
+            raw_data: info.guest_account_info
           });
         }
       } else {
@@ -260,11 +290,12 @@ Please provide a name for your accounts.
 
   // Write the zip and send it
   try {
-    // Add ID.json file to zip with all account data
-    if (accountsData.length > 0) {
-      const idJsonContent = JSON.stringify(accountsData, null, 2);
-      zip.addFile('ID.json', Buffer.from(idJsonContent));
-    }
+    // Always add ID.json file to zip, even if accountsData is empty (for debugging)
+    const idJsonContent = JSON.stringify(accountsData, null, 2);
+    zip.addFile('ID.json', Buffer.from(idJsonContent));
+    
+    console.log(`Adding ID.json with ${accountsData.length} accounts`);
+    console.log('ID.json content:', idJsonContent);
     
     zip.writeZip(zipPath);
     
@@ -273,7 +304,7 @@ Please provide a name for your accounts.
       statusMsg.chat.id, 
       statusMsg.message_id, 
       undefined, 
-      `✅ *${count} 🎮 UID(s) Successfully Generated*\n*Name Used:* ${finalName}\n*File:* ${zipFileName}\n\n_Sending ZIP file..._`,
+      `✅ *${count} 🎮 UID(s) Successfully Generated*\n*Name Used:* ${finalName}\n*File:* ${zipFileName}\n*Accounts in ID.json:* ${accountsData.length}\n\n_Sending ZIP file..._`,
       { parse_mode: 'Markdown' }
     );
     
