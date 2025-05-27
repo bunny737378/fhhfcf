@@ -28,18 +28,22 @@ Hello ${userName}! 👋 I'm your personal FreeFire UID generator bot!
 
 *How to use this bot:* 
 
-📱 Send */uid* to generate 1 account
-📱 Send */uid 5* to generate multiple accounts (max 20)
+📱 Send */uid [number] [name]* to generate accounts
+📱 Example: */uid 5 myname* - Generate 5 accounts with name "myname"
 
 *Features:*
+✅ Custom name support
+✅ Auto name padding (minimum 10 characters)
 ✅ Fast generation
-✅ Easy to use
 ✅ ZIP file format
 ✅ No login required
 ✅ 100% Free
 
-*Example:*
-Type */uid 3* to get 3 FreeFire guest accounts
+*Example Commands:*
+*/uid 3 john* - Generate 3 accounts with name starting "john"
+*/uid 1 player123* - Generate 1 account with name "player123"
+
+*Note:* If your name is less than 10 characters, bot will automatically add random characters to make it 10+ characters.
 
 *Need help?*
 Send */help* for more information
@@ -58,7 +62,7 @@ Send */help* for more information
 // Handle the inline button click
 bot.action('generate_uid', async (ctx) => {
   await ctx.answerCbQuery();
-  await ctx.reply('🎮 Type /uid followed by a number to generate UIDs\nExample: /uid 5');
+  await ctx.reply('🎮 Type /uid [number] [name] to generate UIDs\nExample: /uid 5 myname');
 });
 
 // Help command
@@ -68,9 +72,23 @@ bot.command('help', async (ctx) => {
 
 *Available Commands:*
 */start* - Welcome message and bot info
-*/uid* - Generate 1 account
-*/uid X* - Generate X accounts (1-20)
+*/uid [number] [name]* - Generate accounts with custom name
 */help* - Show this help message
+
+*Command Format:*
+*/uid [number] [name]*
+• [number] = How many accounts (1-20)
+• [name] = Your desired name prefix
+
+*Examples:*
+*/uid 1 john* - Generate 1 account with name "john"
+*/uid 5 player* - Generate 5 accounts with name "player"
+*/uid 10 myname123* - Generate 10 accounts with name "myname123"
+
+*Name Rules:*
+• If name is less than 10 characters, bot adds random characters
+• If name is 10+ characters, bot uses it as-is
+• Only use letters and numbers in names
 
 *How to use generated accounts:*
 1️⃣ Download the ZIP file
@@ -87,24 +105,80 @@ If you have any issues, try again later!
   await ctx.replyWithMarkdown(helpMessage);
 });
 
-// Your existing bot command - updated to use a single status message
+// Updated UID command with custom name support
 bot.command('uid', async (ctx) => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
-  const generateRandomName = () => {
-    const length = Math.floor(Math.random() * 11) + 10; // 10 to 20
-    let name = '';
-    for (let i = 0; i < length; i++) {
-      name += chars.charAt(Math.floor(Math.random() * chars.length));
+  const generateNameWithPadding = (baseName) => {
+    // Remove any non-alphanumeric characters and convert to lowercase
+    const cleanName = baseName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    if (cleanName.length >= 10) {
+      return cleanName;
     }
-    return name;
+    
+    // Add random characters to make it at least 10 characters
+    const remainingLength = 10 - cleanName.length;
+    let padding = '';
+    for (let i = 0; i < remainingLength; i++) {
+      padding += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    return cleanName + padding;
   };
 
-  const input = ctx.message.text.split(' ')[1];
-  const count = Math.min(parseInt(input) || 1, 20); // Max 20
+  const commandParts = ctx.message.text.split(' ');
+  
+  // Check if command format is correct
+  if (commandParts.length < 3) {
+    await ctx.reply(`
+❌ *Wrong Format!*
 
+*Correct format:* /uid [number] [name]
+
+*Examples:*
+/uid 1 john
+/uid 5 player
+/uid 10 myname
+
+Please try again with the correct format.
+    `, { parse_mode: 'Markdown' });
+    return;
+  }
+
+  const countInput = commandParts[1];
+  const nameInput = commandParts.slice(2).join(''); // Join remaining parts as name
+  
+  // Validate count
+  const count = parseInt(countInput);
+  if (isNaN(count) || count < 1 || count > 20) {
+    await ctx.reply(`
+❌ *Invalid Number!*
+
+Please enter a number between 1 and 20.
+
+*Example:* /uid 5 myname
+    `, { parse_mode: 'Markdown' });
+    return;
+  }
+
+  // Validate name
+  if (!nameInput || nameInput.trim() === '') {
+    await ctx.reply(`
+❌ *Name Required!*
+
+Please provide a name for your accounts.
+
+*Example:* /uid 5 myname
+    `, { parse_mode: 'Markdown' });
+    return;
+  }
+
+  // Generate the final name with padding if needed
+  const finalName = generateNameWithPadding(nameInput.trim());
+  
   // Send a single status message that we'll update
-  const statusMsg = await ctx.reply(`⏳ *Generating ${count} UID(s)...*\n\n_Please wait while I process your request_`);
+  const statusMsg = await ctx.reply(`⏳ *Generating ${count} UID(s) with name "${finalName}"...*\n\n_Please wait while I process your request_`, { parse_mode: 'Markdown' });
 
   // Create temporary directory for files
   const tmpDir = path.join(os.tmpdir(), 'bot-' + Date.now());
@@ -133,12 +207,12 @@ bot.command('uid', async (ctx) => {
         statusMsg.chat.id, 
         statusMsg.message_id, 
         undefined, 
-        `🎮 *Generating UID ${i+1}/${count}...*\n\n_Please wait ⏳ while I process your request_`
+        `🎮 *Generating UID ${i+1}/${count} with name "${finalName}"...*\n\n_Please wait ⏳ while I process your request_`,
+        { parse_mode: 'Markdown' }
       );
     }
     
-    const randomName = generateRandomName();
-    const url = `https://ff-account-register.vercel.app/genuidpw/?prefix=${randomName}`;
+    const url = `https://ff-account-register.vercel.app/genuidpw/?prefix=${finalName}`;
 
     try {
       const res = await axios.get(url);
@@ -178,7 +252,8 @@ bot.command('uid', async (ctx) => {
       statusMsg.chat.id, 
       statusMsg.message_id, 
       undefined, 
-      `✅ *${count} 🎮 UID(s) Successfully Generated*\n\n_Sending ZIP file..._`
+      `✅ *${count} 🎮 UID(s) Successfully Generated*\n*Name Used:* ${finalName}\n\n_Sending ZIP file..._`,
+      { parse_mode: 'Markdown' }
     );
     
     await ctx.replyWithDocument({ source: zipPath });
