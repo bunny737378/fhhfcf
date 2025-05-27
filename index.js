@@ -219,7 +219,7 @@ Please provide a name for your accounts.
       );
     }
     
-    const url = `https://ff-account-register.vercel.app/genuidpw/?prefix=${finalName}`;
+    const url = `https://ff-account-register.vercel.app/gen/?prefix=${finalName}`;
 
     try {
       const res = await axios.get(url);
